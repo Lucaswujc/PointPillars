@@ -17,3 +17,6 @@ share/
 lib64
 pyvenv.cfg
 .vscode/
+kitti
+kitti_deleted
+sparsepcgc_data
