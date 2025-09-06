@@ -7,3 +7,16 @@ tmp/
 results/
 *.sh
 .idea
+bin/
+lib/
+lib64/
+etc/
+kitti/
+kitti*/
+share/
+lib64
+pyvenv.cfg
+.vscode/
+kitti
+kitti_deleted
+sparsepcgc_data
