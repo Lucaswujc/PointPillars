@@ -1,0 +1,3 @@
+method: precision
+precision: 0.001
+quant_mode: round

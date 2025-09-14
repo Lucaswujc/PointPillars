@@ -1,0 +1,3 @@
+method: octree
+qlevel: 12
+quant_mode: round

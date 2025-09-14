@@ -1,0 +1,1489 @@
+diff --git a/evaluate.py b/evaluate.py
+index 7e105f7..b5aec9d 100644
+--- a/evaluate.py
++++ b/evaluate.py
+@@ -5,15 +5,23 @@ import torch
+ import pdb
+ from tqdm import tqdm
+ 
+-from pointpillars.utils import setup_seed, keep_bbox_from_image_range, \
+-    keep_bbox_from_lidar_range, write_pickle, write_label, \
+-    iou2d, iou3d_camera, iou_bev
++from pointpillars.utils import (
++    setup_seed,
++    keep_bbox_from_image_range,
++    keep_bbox_from_lidar_range,
++    write_pickle,
++    write_label,
++    iou2d,
++    iou3d_camera,
++    iou_bev,
++)
+ from pointpillars.dataset import Kitti, get_dataloader
+ from pointpillars.model import PointPillars
+ 
+ 
+ def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
+     score_thresholds = []
++    # [ ::-1] is doing reverse order of the list
+     tp_scores = sorted(tp_scores)[::-1]
+     cur_recall, pts_ind = 0, 0
+     for i, score in enumerate(tp_scores):
+@@ -34,59 +42,75 @@ def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
+ 
+ 
+ def do_eval(det_results, gt_results, CLASSES, saved_path):
+-    '''
++    """
+     det_results: list,
+     gt_results: dict(id -> det_results)
+     CLASSES: dict
+-    '''
++    """
+     assert len(det_results) == len(gt_results)
+-    f = open(os.path.join(saved_path, 'eval_results.txt'), 'w')
++    f = open(os.path.join(saved_path, "eval_results.txt"), "w")
+ 
+     # 1. calculate iou
+-    ious = {
+-        'bbox_2d': [],
+-        'bbox_bev': [],
+-        'bbox_3d': []
+-    }
++    ious = {"bbox_2d": [], "bbox_bev": [], "bbox_3d": []}
+     ids = list(sorted(gt_results.keys()))
+     for id in ids:
+-        gt_result = gt_results[id]['annos']
++        gt_result = gt_results[id]["annos"]
+         det_result = det_results[id]
+ 
+         # 1.1, 2d bboxes iou
+-        gt_bboxes2d = gt_result['bbox'].astype(np.float32)
+-        det_bboxes2d = det_result['bbox'].astype(np.float32)
+-        iou2d_v = iou2d(torch.from_numpy(gt_bboxes2d).cuda(), torch.from_numpy(det_bboxes2d).cuda())
+-        ious['bbox_2d'].append(iou2d_v.cpu().numpy())
++        gt_bboxes2d = gt_result["bbox"].astype(np.float32)
++        det_bboxes2d = det_result["bbox"].astype(np.float32)
++        iou2d_v = iou2d(
++            torch.from_numpy(gt_bboxes2d).cuda(), torch.from_numpy(det_bboxes2d).cuda()
++        )
++        ious["bbox_2d"].append(iou2d_v.cpu().numpy())
+ 
+         # 1.2, bev iou
+-        gt_location = gt_result['location'].astype(np.float32)
+-        gt_dimensions = gt_result['dimensions'].astype(np.float32)
+-        gt_rotation_y = gt_result['rotation_y'].astype(np.float32)
+-        det_location = det_result['location'].astype(np.float32)
+-        det_dimensions = det_result['dimensions'].astype(np.float32)
+-        det_rotation_y = det_result['rotation_y'].astype(np.float32)
+-
+-        gt_bev = np.concatenate([gt_location[:, [0, 2]], gt_dimensions[:, [0, 2]], gt_rotation_y[:, None]], axis=-1)
+-        det_bev = np.concatenate([det_location[:, [0, 2]], det_dimensions[:, [0, 2]], det_rotation_y[:, None]], axis=-1)
+-        iou_bev_v = iou_bev(torch.from_numpy(gt_bev).cuda(), torch.from_numpy(det_bev).cuda())
+-        ious['bbox_bev'].append(iou_bev_v.cpu().numpy())
++        gt_location = gt_result["location"].astype(np.float32)
++        gt_dimensions = gt_result["dimensions"].astype(np.float32)
++        gt_rotation_y = gt_result["rotation_y"].astype(np.float32)
++        det_location = det_result["location"].astype(np.float32)
++        det_dimensions = det_result["dimensions"].astype(np.float32)
++        det_rotation_y = det_result["rotation_y"].astype(np.float32)
++
++        gt_bev = np.concatenate(
++            [gt_location[:, [0, 2]], gt_dimensions[:, [0, 2]], gt_rotation_y[:, None]],
++            axis=-1,
++        )
++        det_bev = np.concatenate(
++            [
++                det_location[:, [0, 2]],
++                det_dimensions[:, [0, 2]],
++                det_rotation_y[:, None],
++            ],
++            axis=-1,
++        )
++        iou_bev_v = iou_bev(
++            torch.from_numpy(gt_bev).cuda(), torch.from_numpy(det_bev).cuda()
++        )
++        ious["bbox_bev"].append(iou_bev_v.cpu().numpy())
+ 
+         # 1.3, 3dbboxes iou
+-        gt_bboxes3d = np.concatenate([gt_location, gt_dimensions, gt_rotation_y[:, None]], axis=-1)
+-        det_bboxes3d = np.concatenate([det_location, det_dimensions, det_rotation_y[:, None]], axis=-1)
+-        iou3d_v = iou3d_camera(torch.from_numpy(gt_bboxes3d).cuda(), torch.from_numpy(det_bboxes3d).cuda())
+-        ious['bbox_3d'].append(iou3d_v.cpu().numpy())
++        gt_bboxes3d = np.concatenate(
++            [gt_location, gt_dimensions, gt_rotation_y[:, None]], axis=-1
++        )
++        det_bboxes3d = np.concatenate(
++            [det_location, det_dimensions, det_rotation_y[:, None]], axis=-1
++        )
++        iou3d_v = iou3d_camera(
++            torch.from_numpy(gt_bboxes3d).cuda(), torch.from_numpy(det_bboxes3d).cuda()
++        )
++        ious["bbox_3d"].append(iou3d_v.cpu().numpy())
+ 
+     MIN_IOUS = {
+-        'Pedestrian': [0.5, 0.5, 0.5],
+-        'Cyclist': [0.5, 0.5, 0.5],
+-        'Car': [0.7, 0.7, 0.7]
++        "Pedestrian": [0.5, 0.5, 0.5],
++        "Cyclist": [0.5, 0.5, 0.5],
++        "Car": [0.7, 0.7, 0.7],
+     }
+     MIN_HEIGHT = [40, 25, 25]
+ 
+     overall_results = {}
+-    for e_ind, eval_type in enumerate(['bbox_2d', 'bbox_bev', 'bbox_3d']):
++    for e_ind, eval_type in enumerate(["bbox_2d", "bbox_bev", "bbox_3d"]):
+         eval_ious = ious[eval_type]
+         eval_ap_results, eval_aos_results = {}, {}
+         for cls in CLASSES:
+@@ -95,43 +119,50 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+             CLS_MIN_IOU = MIN_IOUS[cls][e_ind]
+             for difficulty in [0, 1, 2]:
+                 # 1. bbox property
+-                total_gt_ignores, total_det_ignores, total_dc_bboxes, total_scores = [], [], [], []
++                total_gt_ignores, total_det_ignores, total_dc_bboxes, total_scores = (
++                    [],
++                    [],
++                    [],
++                    [],
++                )
+                 total_gt_alpha, total_det_alpha = [], []
+                 for id in ids:
+-                    gt_result = gt_results[id]['annos']
++                    gt_result = gt_results[id]["annos"]
+                     det_result = det_results[id]
+ 
+                     # 1.1 gt bbox property
+-                    cur_gt_names = gt_result['name']
+-                    cur_difficulty = gt_result['difficulty']
++                    cur_gt_names = gt_result["name"]
++                    cur_difficulty = gt_result["difficulty"]
+                     gt_ignores, dc_bboxes = [], []
+                     for j, cur_gt_name in enumerate(cur_gt_names):
+                         ignore = cur_difficulty[j] < 0 or cur_difficulty[j] > difficulty
+                         if cur_gt_name == cls:
+                             valid_class = 1
+-                        elif cls == 'Pedestrian' and cur_gt_name == 'Person_sitting':
++                        elif cls == "Pedestrian" and cur_gt_name == "Person_sitting":
+                             valid_class = 0
+-                        elif cls == 'Car' and cur_gt_name == 'Van':
++                        elif cls == "Car" and cur_gt_name == "Van":
+                             valid_class = 0
+                         else:
+                             valid_class = -1
+-                        
++
+                         if valid_class == 1 and not ignore:
+                             gt_ignores.append(0)
+                         elif valid_class == 0 or (valid_class == 1 and ignore):
+                             gt_ignores.append(1)
+                         else:
+                             gt_ignores.append(-1)
+-                        
+-                        if cur_gt_name == 'DontCare':
+-                            dc_bboxes.append(gt_result['bbox'][j])
++
++                        if cur_gt_name == "DontCare":
++                            dc_bboxes.append(gt_result["bbox"][j])
+                     total_gt_ignores.append(gt_ignores)
+                     total_dc_bboxes.append(np.array(dc_bboxes))
+-                    total_gt_alpha.append(gt_result['alpha'])
++                    total_gt_alpha.append(gt_result["alpha"])
+ 
+                     # 1.2 det bbox property
+-                    cur_det_names = det_result['name']
+-                    cur_det_heights = det_result['bbox'][:, 3] - det_result['bbox'][:, 1]
++                    cur_det_names = det_result["name"]
++                    cur_det_heights = (
++                        det_result["bbox"][:, 3] - det_result["bbox"][:, 1]
++                    )
+                     det_ignores = []
+                     for j, cur_det_name in enumerate(cur_det_names):
+                         if cur_det_heights[j] < MIN_HEIGHT[difficulty]:
+@@ -141,8 +172,8 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                         else:
+                             det_ignores.append(-1)
+                     total_det_ignores.append(det_ignores)
+-                    total_scores.append(det_result['score'])
+-                    total_det_alpha.append(det_result['alpha'])
++                    total_scores.append(det_result["score"])
++                    total_det_alpha.append(det_result["alpha"])
+ 
+                 # 2. calculate scores thresholds for PR curve
+                 tp_scores = []
+@@ -152,22 +183,32 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                     scores = total_scores[i]
+ 
+                     nn, mm = cur_eval_ious.shape
+-                    assigned = np.zeros((mm, ), dtype=np.bool_)
++                    assigned = np.zeros((mm,), dtype=np.bool_)
+                     for j in range(nn):
+                         if gt_ignores[j] == -1:
+                             continue
+                         match_id, match_score = -1, -1
+                         for k in range(mm):
+-                            if not assigned[k] and det_ignores[k] >= 0 and cur_eval_ious[j, k] > CLS_MIN_IOU and scores[k] > match_score:
++                            if (
++                                not assigned[k]
++                                and det_ignores[k] >= 0
++                                and cur_eval_ious[j, k] > CLS_MIN_IOU
++                                and scores[k] > match_score
++                            ):
+                                 match_id = k
+                                 match_score = scores[k]
+                         if match_id != -1:
+                             assigned[match_id] = True
+                             if det_ignores[match_id] == 0 and gt_ignores[j] == 0:
+                                 tp_scores.append(match_score)
+-                total_num_valid_gt = np.sum([np.sum(np.array(gt_ignores) == 0) for gt_ignores in total_gt_ignores])
+-                score_thresholds = get_score_thresholds(tp_scores, total_num_valid_gt)    
+-            
++                total_num_valid_gt = np.sum(
++                    [
++                        np.sum(np.array(gt_ignores) == 0)
++                        for gt_ignores in total_gt_ignores
++                    ]
++                )
++                score_thresholds = get_score_thresholds(tp_scores, total_num_valid_gt)
++
+                 # 3. draw PR curve and calculate mAP
+                 tps, fns, fps, total_aos = [], [], [], []
+ 
+@@ -176,20 +217,30 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                     aos = 0
+                     for i, id in enumerate(ids):
+                         cur_eval_ious = eval_ious[i]
+-                        gt_ignores, det_ignores = total_gt_ignores[i], total_det_ignores[i]
++                        gt_ignores, det_ignores = (
++                            total_gt_ignores[i],
++                            total_det_ignores[i],
++                        )
+                         gt_alpha, det_alpha = total_gt_alpha[i], total_det_alpha[i]
+                         scores = total_scores[i]
+ 
+                         nn, mm = cur_eval_ious.shape
+-                        assigned = np.zeros((mm, ), dtype=np.bool_)
++                        assigned = np.zeros((mm,), dtype=np.bool_)
+                         for j in range(nn):
+                             if gt_ignores[j] == -1:
+                                 continue
+                             match_id, match_iou = -1, -1
+                             for k in range(mm):
+-                                if not assigned[k] and det_ignores[k] >= 0 and scores[k] >= score_threshold and cur_eval_ious[j, k] > CLS_MIN_IOU:
+-    
+-                                    if det_ignores[k] == 0 and cur_eval_ious[j, k] > match_iou:
++                                if (
++                                    not assigned[k]
++                                    and det_ignores[k] >= 0
++                                    and scores[k] >= score_threshold
++                                    and cur_eval_ious[j, k] > CLS_MIN_IOU
++                                ):
++                                    if (
++                                        det_ignores[k] == 0
++                                        and cur_eval_ious[j, k] > match_iou
++                                    ):
+                                         match_iou = cur_eval_ious[j, k]
+                                         match_id = k
+                                     elif det_ignores[k] == 1 and match_iou == -1:
+@@ -199,33 +250,52 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                                 assigned[match_id] = True
+                                 if det_ignores[match_id] == 0 and gt_ignores[j] == 0:
+                                     tp += 1
+-                                    if eval_type == 'bbox_2d':
+-                                        aos += (1 + np.cos(gt_alpha[j] - det_alpha[match_id])) / 2
++                                    if eval_type == "bbox_2d":
++                                        aos += (
++                                            1
++                                            + np.cos(gt_alpha[j] - det_alpha[match_id])
++                                        ) / 2
+                             else:
+                                 if gt_ignores[j] == 0:
+                                     fn += 1
+-                            
++
+                         for k in range(mm):
+-                            if det_ignores[k] == 0 and scores[k] >= score_threshold and not assigned[k]:
++                            if (
++                                det_ignores[k] == 0
++                                and scores[k] >= score_threshold
++                                and not assigned[k]
++                            ):
+                                 fp += 1
+-                        
++
+                         # In case 2d bbox evaluation, we should consider dontcare bboxes
+-                        if eval_type == 'bbox_2d':
++                        if eval_type == "bbox_2d":
+                             dc_bboxes = total_dc_bboxes[i]
+-                            det_bboxes = det_results[id]['bbox']
++                            det_bboxes = det_results[id]["bbox"]
+                             if len(dc_bboxes) > 0:
+-                                ious_dc_det = iou2d(torch.from_numpy(det_bboxes), torch.from_numpy(dc_bboxes), metric=1).numpy().T
++                                ious_dc_det = (
++                                    iou2d(
++                                        torch.from_numpy(det_bboxes),
++                                        torch.from_numpy(dc_bboxes),
++                                        metric=1,
++                                    )
++                                    .numpy()
++                                    .T
++                                )
+                                 for j in range(len(dc_bboxes)):
+                                     for k in range(len(det_bboxes)):
+-                                        if det_ignores[k] == 0 and scores[k] >= score_threshold and not assigned[k]:
++                                        if (
++                                            det_ignores[k] == 0
++                                            and scores[k] >= score_threshold
++                                            and not assigned[k]
++                                        ):
+                                             if ious_dc_det[j, k] > CLS_MIN_IOU:
+                                                 fp -= 1
+                                                 assigned[k] = True
+-                            
++
+                     tps.append(tp)
+                     fns.append(fn)
+                     fps.append(fp)
+-                    if eval_type == 'bbox_2d':
++                    if eval_type == "bbox_2d":
+                         total_aos.append(aos)
+ 
+                 tps, fns, fps = np.array(tps), np.array(fns), np.array(fps)
+@@ -234,14 +304,14 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                 precisions = tps / (tps + fps)
+                 for i in range(len(score_thresholds)):
+                     precisions[i] = np.max(precisions[i:])
+-                
++
+                 sums_AP = 0
+                 for i in range(0, len(score_thresholds), 4):
+                     sums_AP += precisions[i]
+                 mAP = sums_AP / 11 * 100
+                 eval_ap_results[cls].append(mAP)
+ 
+-                if eval_type == 'bbox_2d':
++                if eval_type == "bbox_2d":
+                     total_aos = np.array(total_aos)
+                     similarity = total_aos / (tps + fps)
+                     for i in range(len(score_thresholds)):
+@@ -252,51 +322,71 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
+                     mSimilarity = sums_similarity / 11 * 100
+                     eval_aos_results[cls].append(mSimilarity)
+ 
+-        print(f'=========={eval_type.upper()}==========')
+-        print(f'=========={eval_type.upper()}==========', file=f)
++        print(f"=========={eval_type.upper()}==========")
++        print(f"=========={eval_type.upper()}==========", file=f)
+         for k, v in eval_ap_results.items():
+-            print(f'{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
+-            print(f'{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
+-        if eval_type == 'bbox_2d':
+-            print(f'==========AOS==========')
+-            print(f'==========AOS==========', file=f)
++            print(f"{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}")
++            print(
++                f"{k} AP@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}", file=f
++            )
++        if eval_type == "bbox_2d":
++            print(f"==========AOS==========")
++            print(f"==========AOS==========", file=f)
+             for k, v in eval_aos_results.items():
+-                print(f'{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
+-                print(f'{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
+-        
++                print(f"{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}")
++                print(
++                    f"{k} AOS@{MIN_IOUS[k][e_ind]}: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}",
++                    file=f,
++                )
++
+         overall_results[eval_type] = np.mean(list(eval_ap_results.values()), 0)
+-        if eval_type == 'bbox_2d':
+-            overall_results['AOS'] = np.mean(list(eval_aos_results.values()), 0)
+-    
+-    print(f'\n==========Overall==========')
+-    print(f'\n==========Overall==========', file=f)
++        if eval_type == "bbox_2d":
++            overall_results["AOS"] = np.mean(list(eval_aos_results.values()), 0)
++
++    print(f"\n==========Overall==========")
++    print(f"\n==========Overall==========", file=f)
+     for k, v in overall_results.items():
+-        print(f'{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}')
+-        print(f'{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}', file=f)
++        print(f"{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}")
++        print(f"{k} AP: {v[0]:.4f} {v[1]:.4f} {v[2]:.4f}", file=f)
+     f.close()
+-    
++
+ 
+ def main(args):
+-    val_dataset = Kitti(data_root=args.data_root,
+-                        split='val')
+-    val_dataloader = get_dataloader(dataset=val_dataset, 
+-                                    batch_size=args.batch_size, 
+-                                    num_workers=args.num_workers,
+-                                    shuffle=False)
++    if args.dequantize_config is not None:
++        from pointpillars.utils.quantize import Dequantizer
++
++        dequantizer = Dequantizer(args.dequantize_config)
++    else:
++        dequantizer = None
++
++    val_dataset = Kitti(
++        data_root=args.data_root,
++        split="val",
++        pts_prefix=args.pts_prefix,
++        intensity_filling_strategy=args.intensity_filling_strategy,
++        reference_pcd_prefix=args.reference_pcd_prefix,
++        file_name_changer=args.file_name_changer,
++        dequantizer=dequantizer,
++    )
++    val_dataloader = get_dataloader(
++        dataset=val_dataset,
++        batch_size=args.batch_size,
++        num_workers=args.num_workers,
++        shuffle=False,
++    )
+     CLASSES = Kitti.CLASSES
+-    LABEL2CLASSES = {v:k for k, v in CLASSES.items()}
++    LABEL2CLASSES = {v: k for k, v in CLASSES.items()}
+ 
+     if not args.no_cuda:
+         model = PointPillars(nclasses=args.nclasses).cuda()
+         model.load_state_dict(torch.load(args.ckpt))
+     else:
+         model = PointPillars(nclasses=args.nclasses)
+-        model.load_state_dict(
+-            torch.load(args.ckpt, map_location=torch.device('cpu')))
+-    
++        model.load_state_dict(torch.load(args.ckpt, map_location=torch.device("cpu")))
++
+     saved_path = args.saved_path
+     os.makedirs(saved_path, exist_ok=True)
+-    saved_submit_path = os.path.join(saved_path, 'submit')
++    saved_submit_path = os.path.join(saved_path, "submit")
+     os.makedirs(saved_submit_path, exist_ok=True)
+ 
+     pcd_limit_range = np.array([0, -40, -3, 70.4, 40, 0.0], dtype=np.float32)
+@@ -304,7 +394,7 @@ def main(args):
+     model.eval()
+     with torch.no_grad():
+         format_results = {}
+-        print('Predicting and Formatting the results.')
++        print("Predicting and Formatting the results.")
+         for i, data_dict in enumerate(tqdm(val_dataloader)):
+             if not args.no_cuda:
+                 # move the tensors to the cuda
+@@ -312,75 +402,141 @@ def main(args):
+                     for j, item in enumerate(data_dict[key]):
+                         if torch.is_tensor(item):
+                             data_dict[key][j] = data_dict[key][j].cuda()
+-            
+-            batched_pts = data_dict['batched_pts']
+-            batched_gt_bboxes = data_dict['batched_gt_bboxes']
+-            batched_labels = data_dict['batched_labels']
+-            batched_difficulty = data_dict['batched_difficulty']
+-            batch_results = model(batched_pts=batched_pts, 
+-                                  mode='val',
+-                                  batched_gt_bboxes=batched_gt_bboxes, 
+-                                  batched_gt_labels=batched_labels)
++
++            batched_pts = data_dict["batched_pts"]
++            batched_gt_bboxes = data_dict["batched_gt_bboxes"]
++            batched_labels = data_dict["batched_labels"]
++            batched_difficulty = data_dict["batched_difficulty"]
++            batch_results = model(
++                batched_pts=batched_pts,
++                mode="val",
++                batched_gt_bboxes=batched_gt_bboxes,
++                batched_gt_labels=batched_labels,
++            )
+             # pdb.set_trace()
+             for j, result in enumerate(batch_results):
+                 format_result = {
+-                    'name': [],
+-                    'truncated': [],
+-                    'occluded': [],
+-                    'alpha': [],
+-                    'bbox': [],
+-                    'dimensions': [],
+-                    'location': [],
+-                    'rotation_y': [],
+-                    'score': []
++                    "name": [],
++                    "truncated": [],
++                    "occluded": [],
++                    "alpha": [],
++                    "bbox": [],
++                    "dimensions": [],
++                    "location": [],
++                    "rotation_y": [],
++                    "score": [],
+                 }
+-                
+-                calib_info = data_dict['batched_calib_info'][j]
+-                tr_velo_to_cam = calib_info['Tr_velo_to_cam'].astype(np.float32)
+-                r0_rect = calib_info['R0_rect'].astype(np.float32)
+-                P2 = calib_info['P2'].astype(np.float32)
+-                image_shape = data_dict['batched_img_info'][j]['image_shape']
+-                idx = data_dict['batched_img_info'][j]['image_idx']
+-                result_filter = keep_bbox_from_image_range(result, tr_velo_to_cam, r0_rect, P2, image_shape)
+-                result_filter = keep_bbox_from_lidar_range(result_filter, pcd_limit_range)
+-
+-                lidar_bboxes = result_filter['lidar_bboxes']
+-                labels, scores = result_filter['labels'], result_filter['scores']
+-                bboxes2d, camera_bboxes = result_filter['bboxes2d'], result_filter['camera_bboxes']
+-                for lidar_bbox, label, score, bbox2d, camera_bbox in \
+-                    zip(lidar_bboxes, labels, scores, bboxes2d, camera_bboxes):
+-                    format_result['name'].append(LABEL2CLASSES[label])
+-                    format_result['truncated'].append(0.0)
+-                    format_result['occluded'].append(0)
++
++                calib_info = data_dict["batched_calib_info"][j]
++                tr_velo_to_cam = calib_info["Tr_velo_to_cam"].astype(np.float32)
++                r0_rect = calib_info["R0_rect"].astype(np.float32)
++                P2 = calib_info["P2"].astype(np.float32)
++                image_shape = data_dict["batched_img_info"][j]["image_shape"]
++                idx = data_dict["batched_img_info"][j]["image_idx"]
++                result_filter = keep_bbox_from_image_range(
++                    result, tr_velo_to_cam, r0_rect, P2, image_shape
++                )
++                result_filter = keep_bbox_from_lidar_range(
++                    result_filter, pcd_limit_range
++                )
++
++                lidar_bboxes = result_filter["lidar_bboxes"]
++                labels, scores = result_filter["labels"], result_filter["scores"]
++                bboxes2d, camera_bboxes = (
++                    result_filter["bboxes2d"],
++                    result_filter["camera_bboxes"],
++                )
++                for lidar_bbox, label, score, bbox2d, camera_bbox in zip(
++                    lidar_bboxes, labels, scores, bboxes2d, camera_bboxes
++                ):
++                    format_result["name"].append(LABEL2CLASSES[label])
++                    format_result["truncated"].append(0.0)
++                    format_result["occluded"].append(0)
+                     alpha = camera_bbox[6] - np.arctan2(camera_bbox[0], camera_bbox[2])
+-                    format_result['alpha'].append(alpha)
+-                    format_result['bbox'].append(bbox2d)
+-                    format_result['dimensions'].append(camera_bbox[3:6])
+-                    format_result['location'].append(camera_bbox[:3])
+-                    format_result['rotation_y'].append(camera_bbox[6])
+-                    format_result['score'].append(score)
+-                
+-                write_label(format_result, os.path.join(saved_submit_path, f'{idx:06d}.txt'))
+-
+-                format_results[idx] = {k:np.array(v) for k, v in format_result.items()}
+-        
+-        write_pickle(format_results, os.path.join(saved_path, 'results.pkl'))
+-    
+-    print('Evaluating.. Please wait several seconds.')
+-    do_eval(format_results, val_dataset.data_infos, CLASSES, saved_path)
+-
+-
+-if __name__ == '__main__':
+-    parser = argparse.ArgumentParser(description='Configuration Parameters')
+-    parser.add_argument('--data_root', default='/mnt/ssd1/lifa_rdata/det/kitti', 
+-                        help='your data root for kitti')
+-    parser.add_argument('--ckpt', default='pretrained/epoch_160.pth', help='your checkpoint for kitti')
+-    parser.add_argument('--saved_path', default='results', help='your saved path for predicted results')
+-    parser.add_argument('--batch_size', type=int, default=1)
+-    parser.add_argument('--num_workers', type=int, default=4)
+-    parser.add_argument('--nclasses', type=int, default=3)
+-    parser.add_argument('--no_cuda', action='store_true',
+-                        help='whether to use cuda')
++                    format_result["alpha"].append(alpha)
++                    format_result["bbox"].append(bbox2d)
++                    format_result["dimensions"].append(camera_bbox[3:6])
++                    format_result["location"].append(camera_bbox[:3])
++                    format_result["rotation_y"].append(camera_bbox[6])
++                    format_result["score"].append(score)
++
++                write_label(
++                    format_result, os.path.join(saved_submit_path, f"{idx:06d}.txt")
++                )
++
++                format_results[idx] = {k: np.array(v) for k, v in format_result.items()}
++
++        write_pickle(format_results, os.path.join(saved_path, "results.pkl"))
++
++    print("Evaluating.. Please wait several seconds.")
++    # det_results, gt_results, CLASSES, saved_path
++    do_eval(
++        det_results=format_results,
++        gt_results=val_dataset.data_infos,
++        CLASSES=CLASSES,
++        saved_path=saved_path,
++    )
++
++
++if __name__ == "__main__":
++    parser = argparse.ArgumentParser(description="Configuration Parameters")
++    parser.add_argument(
++        "--data_root",
++        default="/mnt/ssd1/lifa_rdata/det/kitti",
++        help="your data root for kitti",
++    )
++    parser.add_argument(
++        "--ckpt", default="pretrained/epoch_160.pth", help="your checkpoint for kitti"
++    )
++    parser.add_argument(
++        "--saved_path", default="results", help="your saved path for predicted results"
++    )
++    parser.add_argument("--batch_size", type=int, default=1)
++    parser.add_argument("--num_workers", type=int, default=4)
++    parser.add_argument("--nclasses", type=int, default=3)
++    parser.add_argument("--no_cuda", action="store_true", help="whether to use cuda")
++    # add additional argumuments to support evaluation the sparcpcgc reconstructed pcd
++    parser.add_argument(
++        "--pts_prefix",
++        type=str,
++        default="velodyne_reduced",
++        help="the folder name under kitti root which stores the point cloud to be evaluated",
++    )
++    parser.add_argument(
++        "--file_name_changer",
++        type=str,
++        default=r"\1.\2",
++        help="the regex pattern to change the file name, e.g., from 000123.bin to 000123_reduced.ply, use r'\\1_reduced.ply'",
++    )
++
++    parser.add_argument(
++        "--intensity_filling_strategy",
++        type=str,
++        default="random_one",
++        choices=[
++            "random",
++            "random_one",
++            "ones",
++            "zeros",
++            "conform_to_target_intensity",
++            "linear_regression",
++        ],
++        help="the strategy to fill the intensity of the reconstructed point cloud",
++    )
++    parser.add_argument(
++        "--reference_pcd_prefix",
++        type=str,
++        default=None,
++        help="the folder name under kitti root stores the reference point cloud file used in linear regression intensity filling or conform_to_target_intensity intensity filling",
++    )
++
++    parser.add_argument(
++        "--dequantize_config",
++        type=str,
++        default=None,
++        help="the config file to dequantize the point cloud if the point cloud is quantized",
++    )
++
+     args = parser.parse_args()
+ 
+     main(args)
+diff --git a/pointpillars/dataset/kitti.py b/pointpillars/dataset/kitti.py
+old mode 100644
+new mode 100755
+index f272740..a032bd9
+--- a/pointpillars/dataset/kitti.py
++++ b/pointpillars/dataset/kitti.py
+@@ -1,17 +1,24 @@
+ import numpy as np
++import re
+ import os
+-import torch
++import sys
+ from torch.utils.data import Dataset
++from pointpillars.utils.quantize import (
++    dequantize_octree,
++    dequantize_precision,
++    dequantize_resolution,
++)
+ 
+-import sys
+-BASE = os.path.dirname(os.path.abspath(__file__))
+-sys.path.append(os.path.dirname(BASE))
+ 
+ from pointpillars.utils import read_pickle, read_points, bbox_camera2lidar
+ from pointpillars.dataset import point_range_filter, data_augment
+ 
++# ???? what is this thing doing here????
++BASE = os.path.dirname(os.path.abspath(__file__))
++sys.path.append(os.path.dirname(BASE))
++
+ 
+-class BaseSampler():
++class BaseSampler:
+     def __init__(self, sampled_list, shuffle=True):
+         self.total_num = len(sampled_list)
+         self.sampled_list = np.array(sampled_list)
+@@ -23,10 +30,10 @@ class BaseSampler():
+ 
+     def sample(self, num):
+         if self.idx + num < self.total_num:
+-            ret = self.sampled_list[self.indices[self.idx:self.idx+num]]
++            ret = self.sampled_list[self.indices[self.idx : self.idx + num]]
+             self.idx += num
+         else:
+-            ret = self.sampled_list[self.indices[self.idx:]]
++            ret = self.sampled_list[self.indices[self.idx :]]
+             self.idx = 0
+             if self.shuffle:
+                 np.random.shuffle(self.indices)
+@@ -34,48 +41,60 @@ class BaseSampler():
+ 
+ 
+ class Kitti(Dataset):
+-
+-    CLASSES = {
+-        'Pedestrian': 0, 
+-        'Cyclist': 1, 
+-        'Car': 2
+-        }
+-
+-    def __init__(self, data_root, split, pts_prefix='velodyne_reduced'):
+-        assert split in ['train', 'val', 'trainval', 'test']
++    CLASSES = {"Pedestrian": 0, "Cyclist": 1, "Car": 2}
++
++    def __init__(
++        self,
++        data_root,
++        split,
++        pts_prefix="velodyne_reduced",
++        file_name_changer=r"\1.\2",  # default do nothing, keep the original file name
++        intensity_filling_strategy="random_one",
++        reference_pcd_prefix=None,
++        dequantizer=None,
++    ):
++        assert split in ["train", "val", "trainval", "test"]
+         self.data_root = data_root
+         self.split = split
+         self.pts_prefix = pts_prefix
+-        self.data_infos = read_pickle(os.path.join(data_root, f'kitti_infos_{split}.pkl'))
++        self.file_name_changer = file_name_changer
++        self.reference_pcd_prefix = reference_pcd_prefix
++        self.intensity_filling_strategy = intensity_filling_strategy
++        self.dequantizer = dequantizer
++        self.data_infos = read_pickle(
++            os.path.join(data_root, f"kitti_infos_{split}.pkl")
++        )
+         self.sorted_ids = list(self.data_infos.keys())
+-        db_infos = read_pickle(os.path.join(data_root, 'kitti_dbinfos_train.pkl'))
++        db_infos = read_pickle(os.path.join(data_root, "kitti_dbinfos_train.pkl"))
+         db_infos = self.filter_db(db_infos)
+ 
+         db_sampler = {}
+         for cat_name in self.CLASSES:
+             db_sampler[cat_name] = BaseSampler(db_infos[cat_name], shuffle=True)
+-        self.data_aug_config=dict(
++        self.data_aug_config = dict(
+             db_sampler=dict(
+                 db_sampler=db_sampler,
+-                sample_groups=dict(Car=15, Pedestrian=10, Cyclist=10)
+-                ),
++                sample_groups=dict(Car=15, Pedestrian=10, Cyclist=10),
++            ),
+             object_noise=dict(
+                 num_try=100,
+                 translation_std=[0.25, 0.25, 0.25],
+-                rot_range=[-0.15707963267, 0.15707963267]
+-                ),
++                rot_range=[-0.15707963267, 0.15707963267],
++            ),
+             random_flip_ratio=0.5,
+             global_rot_scale_trans=dict(
+                 rot_range=[-0.78539816, 0.78539816],
+                 scale_ratio_range=[0.95, 1.05],
+-                translation_std=[0, 0, 0]
+-                ), 
++                translation_std=[0, 0, 0],
++            ),
+             point_range_filter=[0, -39.68, -3, 69.12, 39.68, 1],
+-            object_range_filter=[0, -39.68, -3, 69.12, 39.68, 1]             
++            object_range_filter=[0, -39.68, -3, 69.12, 39.68, 1],
+         )
+ 
+     def remove_dont_care(self, annos_info):
+-        keep_ids = [i for i, name in enumerate(annos_info['name']) if name != 'DontCare']
++        keep_ids = [
++            i for i, name in enumerate(annos_info["name"]) if name != "DontCare"
++        ]
+         for k, v in annos_info.items():
+             annos_info[k] = v[keep_ids]
+         return annos_info
+@@ -83,62 +102,129 @@ class Kitti(Dataset):
+     def filter_db(self, db_infos):
+         # 1. filter_by_difficulty
+         for k, v in db_infos.items():
+-            db_infos[k] = [item for item in v if item['difficulty'] != -1]
++            db_infos[k] = [item for item in v if item["difficulty"] != -1]
+ 
+         # 2. filter_by_min_points, dict(Car=5, Pedestrian=10, Cyclist=10)
+         filter_thrs = dict(Car=5, Pedestrian=10, Cyclist=10)
+         for cat in self.CLASSES:
+             filter_thr = filter_thrs[cat]
+-            db_infos[cat] = [item for item in db_infos[cat] if item['num_points_in_gt'] >= filter_thr]
+-        
++            db_infos[cat] = [
++                item for item in db_infos[cat] if item["num_points_in_gt"] >= filter_thr
++            ]
++
+         return db_infos
+ 
+     def __getitem__(self, index):
+         data_info = self.data_infos[self.sorted_ids[index]]
+-        image_info, calib_info, annos_info = \
+-            data_info['image'], data_info['calib'], data_info['annos']
+-    
++        image_info, calib_info, annos_info = (
++            data_info["image"],
++            data_info["calib"],
++            data_info["annos"],
++        )
++
+         # point cloud input
+-        velodyne_path = data_info['velodyne_path'].replace('velodyne', self.pts_prefix)
++        velodyne_path = data_info["velodyne_path"].replace("velodyne", self.pts_prefix)
+         pts_path = os.path.join(self.data_root, velodyne_path)
+-        pts = read_points(pts_path)
+-        
++        pts_path = re.sub(r"(\d+)\.(bin)", self.file_name_changer, pts_path)
++        # print(f"pts_path = {pts_path}")
++
++        suffix = os.path.splitext(pts_path)[1]
++        if suffix == ".bin":
++            pts = read_points(pts_path, dim=4)
++        else:
++            if self.intensity_filling_strategy in [
++                "random_one",
++                "random",
++                "zeros",
++                "ones",
++            ]:
++                pts = read_points(pts_path)
++            elif self.intensity_filling_strategy == "linear_regression":
++                if self.reference_pcd_prefix is None:
++                    raise ValueError(
++                        "reference_pcd_prefix should be provided when intensity_filling_strategy is linear_regression"
++                    )
++                reference_bin_relative_path = data_info["velodyne_path"].replace(
++                    "velodyne", self.reference_pcd_prefix
++                )
++                reference_bin_path = os.path.join(
++                    self.data_root, reference_bin_relative_path
++                )
++                reference_pcd = read_points(reference_bin_path)
++                pts = read_points(
++                    pts_path,
++                    dim=4,
++                    intensity_fillinng_strategy="linear_regression",
++                    reference_pcd=reference_pcd,
++                )
++            elif self.intensity_filling_strategy == "conform_to_target_intensity":
++                if self.reference_pcd_prefix is None:
++                    raise ValueError(
++                        "reference_pcd_prefix should be provided when intensity_filling_strategy is conform_to_target_intensity"
++                    )
++                # use the intensity distribution of the training set as the target intensity
++                reference_bin_relative_path = data_info["velodyne_path"].replace(
++                    "velodyne", self.reference_pcd_prefix
++                )
++                reference_bin_path = os.path.join(
++                    self.data_root, reference_bin_relative_path
++                )
++                reference_pcd = read_points(reference_bin_path)
++                target_intensity = reference_pcd[:, 3]
++                pts = read_points(
++                    pts_path,
++                    dim=4,
++                    intensity_filling_strategy="conform_to_target_intensity",
++                    target_intensity=target_intensity,
++                )
++            else:
++                raise ValueError(
++                    f"Not supported intensity_fillinng_strategy {self.intensity_filling_strategy}"
++                )
++        if self.dequantizer is not None:
++            intensity = pts[:, 3:]
++            pts_xyz = self.dequantizer.dequantize(pts[:, :3])
++            pts = np.hstack([pts_xyz, intensity])
+         # calib input: for bbox coordinates transformation between Camera and Lidar.
+         # because
+-        tr_velo_to_cam = calib_info['Tr_velo_to_cam'].astype(np.float32)
+-        r0_rect = calib_info['R0_rect'].astype(np.float32)
++        tr_velo_to_cam = calib_info["Tr_velo_to_cam"].astype(np.float32)
++        r0_rect = calib_info["R0_rect"].astype(np.float32)
+ 
+         # annotations input
+         annos_info = self.remove_dont_care(annos_info)
+-        annos_name = annos_info['name']
+-        annos_location = annos_info['location']
+-        annos_dimension = annos_info['dimensions']
+-        rotation_y = annos_info['rotation_y']
+-        gt_bboxes = np.concatenate([annos_location, annos_dimension, rotation_y[:, None]], axis=1).astype(np.float32)
++        annos_name = annos_info["name"]
++        annos_location = annos_info["location"]
++        annos_dimension = annos_info["dimensions"]
++        rotation_y = annos_info["rotation_y"]
++        gt_bboxes = np.concatenate(
++            [annos_location, annos_dimension, rotation_y[:, None]], axis=1
++        ).astype(np.float32)
+         gt_bboxes_3d = bbox_camera2lidar(gt_bboxes, tr_velo_to_cam, r0_rect)
+         gt_labels = [self.CLASSES.get(name, -1) for name in annos_name]
+         data_dict = {
+-            'pts': pts,
+-            'gt_bboxes_3d': gt_bboxes_3d,
+-            'gt_labels': np.array(gt_labels), 
+-            'gt_names': annos_name,
+-            'difficulty': annos_info['difficulty'],
+-            'image_info': image_info,
+-            'calib_info': calib_info
++            "pts": pts,
++            "gt_bboxes_3d": gt_bboxes_3d,
++            "gt_labels": np.array(gt_labels),
++            "gt_names": annos_name,
++            "difficulty": annos_info["difficulty"],
++            "image_info": image_info,
++            "calib_info": calib_info,
+         }
+-        if self.split in ['train', 'trainval']:
+-            data_dict = data_augment(self.CLASSES, self.data_root, data_dict, self.data_aug_config)
++        if self.split in ["train", "trainval"]:
++            data_dict = data_augment(
++                self.CLASSES, self.data_root, data_dict, self.data_aug_config
++            )
+         else:
+-            data_dict = point_range_filter(data_dict, point_range=self.data_aug_config['point_range_filter'])
++            data_dict = point_range_filter(
++                data_dict, point_range=self.data_aug_config["point_range_filter"]
++            )
+ 
+         return data_dict
+ 
+     def __len__(self):
+         return len(self.data_infos)
+- 
+ 
+-if __name__ == '__main__':
+-    
+-    kitti_data = Kitti(data_root='/mnt/ssd1/lifa_rdata/det/kitti', 
+-                       split='train')
++
++if __name__ == "__main__":
++    kitti_data = Kitti(data_root="/mnt/ssd1/lifa_rdata/det/kitti", split="train")
+     kitti_data.__getitem__(9)
+diff --git a/pointpillars/utils/io.py b/pointpillars/utils/io.py
+old mode 100644
+new mode 100755
+index 887fe51..af1e433
+--- a/pointpillars/utils/io.py
++++ b/pointpillars/utils/io.py
+@@ -1,51 +1,137 @@
+ import numpy as np
+ import os
+ import pickle
++import open3d as o3d
++import logging
++from sklearn.linear_model import LinearRegression
+ 
+ 
+-def read_pickle(file_path, suffix='.pkl'):
++def linear_regression_xyz_intensity(points: np.ndarray):
++    """
++    Given a Nx4 numpy array [x, y, z, intensity],
++    perform linear regression with intensity as dependent variable and x, y, z as independent variables.
++    Returns: model (sklearn LinearRegression), coefficients, intercept
++    """
++    X = points[:, :3]
++    y = points[:, 3]
++    model = LinearRegression()
++    model.fit(X, y)
++    return model
++
++
++logging.basicConfig(level=logging.INFO)
++
++
++def read_pickle(file_path, suffix=".pkl"):
+     assert os.path.splitext(file_path)[1] == suffix
+-    with open(file_path, 'rb') as f:
++    with open(file_path, "rb") as f:
+         data = pickle.load(f)
+     return data
+ 
+ 
+ def write_pickle(results, file_path):
+-    with open(file_path, 'wb') as f:
++    with open(file_path, "wb") as f:
+         pickle.dump(results, f)
+ 
+ 
+-def read_points(file_path, dim=4):
+-    suffix = os.path.splitext(file_path)[1] 
+-    assert suffix in ['.bin', '.ply']
+-    if suffix == '.bin':
++def read_points(file_path, dim=4, **kwargs):
++    suffix = os.path.splitext(file_path)[1]
++    assert suffix in [".bin", ".ply"]
++    if suffix == ".bin":
+         return np.fromfile(file_path, dtype=np.float32).reshape(-1, dim)
+     else:
+-        raise NotImplementedError
++        return ply_to_points(file_path, **kwargs)
++
++
++def ply_to_points(file_path, **kwargs):
++    pcd = o3d.io.read_point_cloud(file_path)
++    points = np.asarray(pcd.points)
++    intensity_filling_strategy = kwargs.get("intensity_filling_strategy", None)
++    if pcd.has_colors() and intensity_filling_strategy is None:
++        # no intensity_filling_strategy provided, and color existed in the ply file, use color mean as intensity
++        colors = np.asarray(pcd.colors)
++        intensity = colors.mean(axis=1, keepdims=True)
++        # logging.info(f"colors = {colors}, intensity = {intensity}")
++        points_with_intensity = np.hstack([points, intensity])
++    else:
++        # no color exists in the ply file, fill intensity according to intensity_filling_strategy
++        if intensity_filling_strategy is None:
++            raise ValueError(
++                "intensity_filling_strategy should be provided when no color exists in the ply file"
++            )
++        size = points.shape[0]
++        target_intensity = kwargs.get("target_intensity", None)
++        reference_pcd = kwargs.get("reference_pcd", None)
++
++        if intensity_filling_strategy == "conform_to_target_intensity":
++            if target_intensity is None:
++                raise ValueError(
++                    "target_intensity should be provided when intensity_filling_strategy is conform_to_target_intensity"
++                )
++            intensity = np.random.choice(target_intensity, size=(size, 1), replace=True)
++        elif intensity_filling_strategy == "linear_regression":
++            if reference_pcd is None:
++                raise ValueError(
++                    "reference_pcd (N x [x,y,z,intensity]) should be provided when intensity_filling_strategy is linear_regression"
++                )
++            intensity = (
++                linear_regression_xyz_intensity(reference_pcd)
++                .predict(points[:, :3])
++                .reshape(-1, 1)
++            )
++        elif intensity_filling_strategy == "random":
++            intensity = np.random.rand(size, 1)
++        elif intensity_filling_strategy == "random_one":
++            intensity = np.ones((size, 1), dtype=points.dtype) * np.random.rand(1)
++        elif intensity_filling_strategy == "zeros":
++            intensity = np.zeros((size, 1), dtype=points.dtype)
++        elif intensity_filling_strategy == "ones":
++            intensity = np.ones((size, 1), dtype=points.dtype)
++        else:
++            raise ValueError(
++                f"Not supported intensity_filling_strategy {intensity_filling_strategy}"
++            )
++        # logging.info(f"intensity_filling_strategy = {intensity_fillinng_strategy}, intensity = {intensity}")
++        points_with_intensity = np.hstack([points, intensity])
++    return points_with_intensity
+ 
+ 
+ def write_points(lidar_points, file_path):
+-    suffix = os.path.splitext(file_path)[1] 
+-    assert suffix in ['.bin', '.ply']
+-    if suffix == '.bin':
+-        with open(file_path, 'w') as f:
++    suffix = os.path.splitext(file_path)[1]
++    assert suffix in [".bin", ".ply"]
++    if suffix == ".bin":
++        with open(file_path, "w") as f:
+             lidar_points.tofile(f)
+     else:
+         raise NotImplementedError
+ 
+ 
+ def read_calib(file_path, extend_matrix=True):
+-    with open(file_path, 'r') as f:
++    with open(file_path, "r") as f:
+         lines = f.readlines()
+     lines = [line.strip() for line in lines]
+-    P0 = np.array([item for item in lines[0].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
+-    P1 = np.array([item for item in lines[1].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
+-    P2 = np.array([item for item in lines[2].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
+-    P3 = np.array([item for item in lines[3].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
++    P0 = np.array([item for item in lines[0].split(" ")[1:]], dtype=np.float32).reshape(
++        3, 4
++    )
++    P1 = np.array([item for item in lines[1].split(" ")[1:]], dtype=np.float32).reshape(
++        3, 4
++    )
++    P2 = np.array([item for item in lines[2].split(" ")[1:]], dtype=np.float32).reshape(
++        3, 4
++    )
++    P3 = np.array([item for item in lines[3].split(" ")[1:]], dtype=np.float32).reshape(
++        3, 4
++    )
+ 
+-    R0_rect = np.array([item for item in lines[4].split(' ')[1:]], dtype=np.float32).reshape(3, 3)
+-    Tr_velo_to_cam = np.array([item for item in lines[5].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
+-    Tr_imu_to_velo = np.array([item for item in lines[6].split(' ')[1:]], dtype=np.float32).reshape(3, 4)
++    R0_rect = np.array(
++        [item for item in lines[4].split(" ")[1:]], dtype=np.float32
++    ).reshape(3, 3)
++    Tr_velo_to_cam = np.array(
++        [item for item in lines[5].split(" ")[1:]], dtype=np.float32
++    ).reshape(3, 4)
++    Tr_imu_to_velo = np.array(
++        [item for item in lines[6].split(" ")[1:]], dtype=np.float32
++    ).reshape(3, 4)
+ 
+     if extend_matrix:
+         P0 = np.concatenate([P0, np.array([[0, 0, 0, 1]])], axis=0)
+@@ -57,53 +143,66 @@ def read_calib(file_path, extend_matrix=True):
+         R0_rect_extend[:3, :3] = R0_rect
+         R0_rect = R0_rect_extend
+ 
+-        Tr_velo_to_cam = np.concatenate([Tr_velo_to_cam, np.array([[0, 0, 0, 1]])], axis=0)
+-        Tr_imu_to_velo = np.concatenate([Tr_imu_to_velo, np.array([[0, 0, 0, 1]])], axis=0)
++        Tr_velo_to_cam = np.concatenate(
++            [Tr_velo_to_cam, np.array([[0, 0, 0, 1]])], axis=0
++        )
++        Tr_imu_to_velo = np.concatenate(
++            [Tr_imu_to_velo, np.array([[0, 0, 0, 1]])], axis=0
++        )
+ 
+-    calib_dict=dict(
++    calib_dict = dict(
+         P0=P0,
+         P1=P1,
+         P2=P2,
+         P3=P3,
+         R0_rect=R0_rect,
+         Tr_velo_to_cam=Tr_velo_to_cam,
+-        Tr_imu_to_velo=Tr_imu_to_velo
++        Tr_imu_to_velo=Tr_imu_to_velo,
+     )
+     return calib_dict
+ 
+ 
+ def read_label(file_path):
+-    with open(file_path, 'r') as f:
++    with open(file_path, "r") as f:
+         lines = f.readlines()
+-    lines = [line.strip().split(' ') for line in lines]
++    lines = [line.strip().split(" ") for line in lines]
+     annotation = {}
+-    annotation['name'] = np.array([line[0] for line in lines])
+-    annotation['truncated'] = np.array([line[1] for line in lines], dtype=np.float32)
+-    annotation['occluded'] = np.array([line[2] for line in lines], dtype=np.int32)
+-    annotation['alpha'] = np.array([line[3] for line in lines], dtype=np.float32)
+-    annotation['bbox'] = np.array([line[4:8] for line in lines], dtype=np.float32)
+-    annotation['dimensions'] = np.array([line[8:11] for line in lines], dtype=np.float32)[:, [2, 0, 1]] # hwl -> camera coordinates (lhw)
+-    annotation['location'] = np.array([line[11:14] for line in lines], dtype=np.float32)
+-    annotation['rotation_y'] = np.array([line[14] for line in lines], dtype=np.float32)
+-    
++    annotation["name"] = np.array([line[0] for line in lines])
++    annotation["truncated"] = np.array([line[1] for line in lines], dtype=np.float32)
++    annotation["occluded"] = np.array([line[2] for line in lines], dtype=np.int32)
++    annotation["alpha"] = np.array([line[3] for line in lines], dtype=np.float32)
++    annotation["bbox"] = np.array([line[4:8] for line in lines], dtype=np.float32)
++    annotation["dimensions"] = np.array(
++        [line[8:11] for line in lines], dtype=np.float32
++    )[:, [2, 0, 1]]  # hwl -> camera coordinates (lhw)
++    annotation["location"] = np.array([line[11:14] for line in lines], dtype=np.float32)
++    annotation["rotation_y"] = np.array([line[14] for line in lines], dtype=np.float32)
++
+     return annotation
+ 
+ 
+-def write_label(result, file_path, suffix='.txt'):
+-    '''
++def write_label(result, file_path, suffix=".txt"):
++    """
+     result: dict,
+     file_path: str
+-    '''
++    """
+     assert os.path.splitext(file_path)[1] == suffix
+-    name, truncated, occluded, alpha, bbox, dimensions, location, rotation_y, score = \
+-        result['name'], result['truncated'], result['occluded'], result['alpha'], \
+-        result['bbox'], result['dimensions'], result['location'], result['rotation_y'], \
+-        result['score']
+-    
+-    with open(file_path, 'w') as f:
++    name, truncated, occluded, alpha, bbox, dimensions, location, rotation_y, score = (
++        result["name"],
++        result["truncated"],
++        result["occluded"],
++        result["alpha"],
++        result["bbox"],
++        result["dimensions"],
++        result["location"],
++        result["rotation_y"],
++        result["score"],
++    )
++
++    with open(file_path, "w") as f:
+         for i in range(len(name)):
+-            bbox_str = ' '.join(map(str, bbox[i]))
+-            hwl = ' '.join(map(str, dimensions[i]))
+-            xyz = ' '.join(map(str, location[i]))
+-            line = f'{name[i]} {truncated[i]} {occluded[i]} {alpha[i]} {bbox_str} {hwl} {xyz} {rotation_y[i]} {score[i]}\n'
++            bbox_str = " ".join(map(str, bbox[i]))
++            hwl = " ".join(map(str, dimensions[i]))
++            xyz = " ".join(map(str, location[i]))
++            line = f"{name[i]} {truncated[i]} {occluded[i]} {alpha[i]} {bbox_str} {hwl} {xyz} {rotation_y[i]} {score[i]}\n"
+             f.writelines(line)
+diff --git a/pointpillars/utils/quantize.py b/pointpillars/utils/quantize.py
+new file mode 100644
+index 0000000..ac1b3ff
+--- /dev/null
++++ b/pointpillars/utils/quantize.py
+@@ -0,0 +1,248 @@
++import numpy as np
++
++
++class Dequantizer:
++    def __init__(self, config_file):
++        import yaml
++
++        with open(config_file, "r") as f:
++            self.config = yaml.safe_load(f)
++        self.method = self.config.get("method", None)
++        assert self.method in [
++            "precision",
++            "resolution",
++            "octree",
++        ], "Unsupported dequantization method: {}".format(self.method)
++        if self.method == "precision":
++            self.precision = self.config.get("precision", 0.001)
++            self.quant_mode = self.config.get("quant_mode", "round")
++        elif self.method == "resolution":
++            self.resolution = self.config.get("resolution", 65535)
++            self.quant_mode = self.config.get("quant_mode", "round")
++        elif self.method == "octree":
++            self.qlevel = self.config.get("qlevel", 12)
++            self.quant_mode = self.config.get("quant_mode", "round")
++
++    def dequantize(self, points, **kwargs):
++        assert (
++            isinstance(points, np.ndarray) and points.ndim == 2 and points.shape[1] == 3
++        )
++        if self.method == "precision":
++            quant_error = kwargs.get("quant_error", 0)
++            points_out = dequantize_precision(
++                points,
++                quant_error=quant_error,
++                precision=self.precision,
++            )
++        elif self.method == "resolution":
++            # max and min bounds are required, but it seems that we need to get this from reference file
++            # kitti implemnetation is even more complicated . for now ignore
++            # research shows that we may not need to dequantize the resolution quantized points
++            max_bound = kwargs.get("max_bound", None)
++            min_bound = kwargs.get("min_bound", None)
++            quant_error = kwargs.get("quant_error", 0)
++            assert max_bound is not None and min_bound is not None
++            assert isinstance(max_bound, np.ndarray) and max_bound.shape == (3,)
++            assert isinstance(min_bound, np.ndarray) and min_bound.shape == (3,)
++
++            points_out = dequantize_resolution(
++                points,
++                max_bound=max_bound,
++                min_bound=min_bound,
++                quant_error=quant_error,
++                resolution=self.resolution,
++            )
++        elif self.method == "octree":
++            # min, max bounds and centroid are required, but it seems that we need to get this from reference file
++            # research shows that we may not need to dequantize the octree quantized points
++            min_bound = kwargs.get("min_bound", None)
++            max_bound = kwargs.get("max_bound", None)
++            centroid = kwargs.get("centroid", None)
++            quant_error = kwargs.get("quant_error", 0)
++            assert (
++                min_bound is not None and max_bound is not None and centroid is not None
++            )
++            assert isinstance(min_bound, np.ndarray) and min_bound.shape == (3,)
++            assert isinstance(max_bound, np.ndarray) and max_bound.shape == (3,)
++            assert isinstance(centroid, np.ndarray) and centroid.shape == (3,)
++            points_out = dequantize_octree(
++                points,
++                min_bound=min_bound,
++                max_bound=max_bound,
++                centroid=centroid,
++                quant_error=quant_error,
++                qlevel=self.qlevel,
++            )
++        return points_out
++
++
++######################## basic operation ########################
++def normalize(points: np.ndarray, offset="min"):
++    if offset == "mean":
++        ref_point = points.mean(axis=0)
++    elif offset == "min":
++        ref_point = points.min(axis=0)
++    else:
++        ref_point = np.array([0, 0, 0])
++    points = points - ref_point
++
++    return points, ref_point
++
++
++def quantize_precision(
++    points: np.ndarray, precision=0.001, quant_mode="round", return_offset=False
++):
++    assert quant_mode in ["round", "floor"]
++    points = points.astype("float")
++    points_out = points / float(precision)
++    points_quant = points_out
++    if quant_mode == "round":
++        points_quant = np.round(points_out)
++    if quant_mode == "floor":
++        points_quant = np.floor(points_out)
++    points_quant = points_quant.astype("int")
++    if not return_offset:
++        return points_quant
++    else:
++        quant_error = points_out - points_quant
++        return points_quant, quant_error
++
++
++def dequantize_precision(points: np.ndarray, quant_error=0, precision=0.001):
++    # points = points.astype('float')
++    points_out = points + quant_error
++    points_out = points_out * precision
++
++    return points_out
++
++
++def quantize_resolution(
++    points: np.ndarray, resolution=65535, quant_mode="round", return_offset=False
++):
++    assert quant_mode in ["round", "floor"]
++    min_bound = points.min(axis=0)
++    points_out = points - min_bound
++    max_bound = points_out.max()
++    points_out = points_out / max_bound
++    points_out = points_out * resolution
++    points_quant = points_out
++    if quant_mode == "round":
++        points_quant = np.round(points_out)
++    if quant_mode == "floor":
++        points_quant = np.floor(points_out)
++    points_quant = points_quant.astype("int")
++    if not return_offset:
++        return points_quant, max_bound, min_bound
++    else:
++        quant_error = points_out - points_quant
++        return points_quant, max_bound, min_bound, quant_error
++
++
++def dequantize_resolution(
++    points: np.ndarray,
++    max_bound: np.ndarray,
++    min_bound: np.ndarray,
++    quant_error=0,
++    resolution=65535,
++):
++    points = points.astype("float")
++    points_out = points + quant_error
++    points_out = points_out / resolution
++    points_out = points_out * max_bound
++    points_out = points_out + min_bound
++    return points_out
++
++
++def quantize_octree(
++    points: np.ndarray, qlevel=12, quant_mode="round", return_offset=False
++):
++    """Quantization method of OctAttention & VoxelContextNet"""
++    assert quant_mode in ["round", "floor"]
++    points_out = points.copy()
++    # normalize
++    centroid = points_out.mean(axis=0)
++    points_out = points_out - centroid
++    max_bound = np.abs(points_out).max()
++    points_out = points_out / max_bound
++    # print('DBG!!', points_raw.max(), points_raw.min())
++    # attention
++    min_bound = points_out.min(axis=0)
++    points_out = points_out - min_bound
++    resolution = (2**qlevel - 1) / 2
++    points_out = points_out * resolution
++    points_quant = points_out
++    if quant_mode == "round":
++        points_quant = np.round(points_out)
++    if quant_mode == "floor":
++        points_quant = np.floor(points_out)
++    points_quant = points_quant.astype("int")
++    if not return_offset:
++        return points_quant, min_bound, max_bound, centroid
++    else:
++        quant_error = points_out - points_quant
++        return points_quant, min_bound, max_bound, centroid, quant_error
++
++
++def dequantize_octree(
++    points: np.ndarray,
++    min_bound: np.ndarray,
++    max_bound: np.ndarray,
++    centroid: np.ndarray,
++    quant_error=0,
++    qlevel=12,
++):
++    points = points.astype("float")
++    points_out = points + quant_error
++    resolution = (2**qlevel - 1) / 2
++    points_out = points_out / resolution
++    points_out = points_out + min_bound
++    points_out = points_out * max_bound
++    points_out = points_out + centroid
++    return points_out
++
++
++def random_quantize(points: np.ndarray, factor=None, min_factor=0.5, max_factor=1):
++    if factor is None:
++        factor = np.random.uniform(min_factor, max_factor)
++    pointsQ = quantize_precision(
++        points, precision=1 / factor, quant_mode="round", return_offset=False
++    )
++    pointsQ = np.unique(pointsQ, axis=0).astype("int")
++
++    return pointsQ
++
++
++# def merge_points(points: np.ndarray, offset: np.ndarray):
++#     """TODO"""
++#     # quantize
++#     points = points.astype("int64")
++#     min_value = points.min(axis=0)
++#     points_in = points - min_value
++#     # collect duplicated points
++#     step = points_in.max() + 1
++#     points_1d = sum([points_in[:, i] * (step**i) for i in range(3)])
++#     offset_dict = {}
++#     for i, pt in enumerate(points_1d):
++#         if not pt in offset_dict:
++#             offset_dict[pt] = [offset[i]]
++#         else:
++#             offset_dict[pt].append(offset[i])
++#     # average duplicated points
++#     points_out = []
++#     offset_out = []
++#     for k, v in offset_dict.items():
++#         points_out.append(k)
++#         if len(v) == 1:
++#             offset_out.append(v[0])
++#         else:
++#             offset_out.append(np.vstack(v).mean(axis=0))
++#     # collection
++#     points_out = np.array(points_out)
++#     points_out = np.vstack(
++#         [(points_out // (step**i)) % step for i in range(3)]
++#     ).transpose(1, 0)
++#     points_out = points_out + min_value
++#     offset_out = np.vstack(offset_out)
++#     assert (np.unique(points, axis=0) == np.unique(points_out, axis=0)).all()
++
++#     return points_out, offset_out
