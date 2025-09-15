@@ -18,5 +18,8 @@ lib64
 pyvenv.cfg
 .vscode/
 kitti
-kitti_deleted
+kitti_deleted/
 sparsepcgc_data
+data/
+structured_sparsepcgc_data/
+sparsepcgc_eval

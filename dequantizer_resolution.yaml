@@ -1,0 +1,3 @@
+method: resolution
+resolution: 65535
+quant_mode: round
