@@ -608,6 +608,57 @@ def keep_bbox_from_lidar_range(result, pcd_limit_range):
     return result
 
 
+def keep_bbox_from_lidar_range_strict(result, pcd_limit_range):
+    """
+    Strict LiDAR-range filter: remove boxes only if ALL 8 corners are outside
+    the provided axis-aligned 3D range.
+
+    result: dict(lidar_bboxes, labels, scores, optionally bboxes2d, camera_bboxes)
+    pcd_limit_range: iterable of 6 values [xmin, ymin, zmin, xmax, ymax, zmax]
+
+    Returns: same dict structure with only boxes that have at least one corner
+             inside the provided range.
+    """
+    lidar_bboxes, labels, scores = result['lidar_bboxes'], result['labels'], result['scores']
+    if 'bboxes2d' not in result:
+        result['bboxes2d'] = np.zeros_like(lidar_bboxes[:, :4])
+    if 'camera_bboxes' not in result:
+        result['camera_bboxes'] = np.zeros_like(lidar_bboxes)
+    bboxes2d, camera_bboxes = result['bboxes2d'], result['camera_bboxes']
+
+    # compute 8 corners for each bbox
+    if len(lidar_bboxes) == 0:
+        # nothing to filter
+        return {
+            'lidar_bboxes': lidar_bboxes,
+            'labels': labels,
+            'scores': scores,
+            'bboxes2d': bboxes2d,
+            'camera_bboxes': camera_bboxes
+        }
+
+    bboxes_corners = bbox3d2corners(lidar_bboxes)  # (n, 8, 3)
+
+    mins = np.array(pcd_limit_range[:3], dtype=bboxes_corners.dtype)
+    maxs = np.array(pcd_limit_range[3:], dtype=bboxes_corners.dtype)
+
+    # per-corner check: True if corner is inside range
+    # shape -> (n, 8)
+    corner_inside = np.all((bboxes_corners >= mins[None, None, :]) & (bboxes_corners <= maxs[None, None, :]), axis=2)
+
+    # keep box if any corner is inside the range
+    keep_flag = np.any(corner_inside, axis=1)
+
+    result = {
+        'lidar_bboxes': lidar_bboxes[keep_flag],
+        'labels': labels[keep_flag],
+        'scores': scores[keep_flag],
+        'bboxes2d': bboxes2d[keep_flag],
+        'camera_bboxes': camera_bboxes[keep_flag]
+    }
+    return result
+
+
 def points_in_bboxes_v2(points, r0_rect, tr_velo_to_cam, dimensions, location, rotation_y, name):
     '''
     points: shape=(N, 4) 
