@@ -1,5 +1,5 @@
 import argparse
-import copy
+from unittest import result
 import numpy as np
 import os
 import torch
@@ -42,7 +42,19 @@ def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
     return score_thresholds
 
 
-def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
+def ensure_2d(arr, ncol=None):
+    arr = np.squeeze(arr)
+    if arr.size == 0:
+        if ncol is not None:
+            return np.empty((0, ncol), dtype=arr.dtype)
+        else:
+            return np.empty((0, 0), dtype=arr.dtype)
+    if arr.ndim == 1:
+        arr = arr.reshape(1, -1)
+    return arr
+
+
+def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids=[]):
     """
     det_results: list,
     gt_results: dict(id -> det_results)
@@ -54,7 +66,7 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
     # 1. calculate iou
     ious = {"bbox_2d": [], "bbox_bev": [], "bbox_3d": []}
     ids = [x for x in list(sorted(det_results.keys())) if x not in skipped_ids]
-    
+
     for id in ids:
         gt_result = gt_results[id]["annos"]
         det_result = det_results[id]
@@ -62,6 +74,7 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
         # 1.1, 2d bboxes iou
         gt_bboxes2d = gt_result["bbox"].astype(np.float32)
         det_bboxes2d = det_result["bbox"].astype(np.float32)
+        det_bboxes2d = ensure_2d(det_bboxes2d, ncol=gt_bboxes2d.shape[1])
         iou2d_v = iou2d(
             torch.from_numpy(gt_bboxes2d).cuda(), torch.from_numpy(det_bboxes2d).cuda()
         )
@@ -71,8 +84,12 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
         gt_location = gt_result["location"].astype(np.float32)
         gt_dimensions = gt_result["dimensions"].astype(np.float32)
         gt_rotation_y = gt_result["rotation_y"].astype(np.float32)
-        det_location = det_result["location"].astype(np.float32)
-        det_dimensions = det_result["dimensions"].astype(np.float32)
+        det_location = ensure_2d(
+            det_result["location"].astype(np.float32), ncol=gt_location.shape[1]
+        )
+        det_dimensions = ensure_2d(
+            det_result["dimensions"].astype(np.float32), ncol=gt_dimensions.shape[1]
+        )
         det_rotation_y = det_result["rotation_y"].astype(np.float32)
 
         gt_bev = np.concatenate(
@@ -99,6 +116,7 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
         det_bboxes3d = np.concatenate(
             [det_location, det_dimensions, det_rotation_y[:, None]], axis=-1
         )
+        det_bboxes3d = ensure_2d(det_bboxes3d, ncol=gt_bboxes3d.shape[1])
         iou3d_v = iou3d_camera(
             torch.from_numpy(gt_bboxes3d).cuda(), torch.from_numpy(det_bboxes3d).cuda()
         )
@@ -115,6 +133,32 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
     for e_ind, eval_type in enumerate(["bbox_2d", "bbox_bev", "bbox_3d"]):
         eval_ious = ious[eval_type]
         eval_ap_results, eval_aos_results = {}, {}
+
+        # in the Ground Truth kitti dataset, the pickle file contains
+        # the following classes
+        # 'Car', 'Van', 'Truck', 'Pedestrian','Tram' , 'Person_sitting', 'Cyclist', 'Misc','DontCare'
+        # kitti.CLASSES only contains 'Car', 'Pedestrian','Cyclist'
+        # here we only evaluate the classes in kitti.CLASSES
+        # The doulble loop below will go through each class and each difficulty
+        # for each class and each difficulty, we will go through each image
+        # for each image, we will assign the ignore flag for each gt bbox and det bbox
+        # based on the class name, difficulty and bbox height
+        # after assigning the ignore flag for each gt bbox and det bbox
+        # we will calculate the precision-recall curve and average precision
+        # during the process of assigning the ignore flag for each gt bbox and det bbox
+        # we also need to consider the DontCare bboxes in the gt bboxes
+        # the DontCare bboxes are used to ignore the false positive detections
+        # that are in the DontCare region
+        # the DontCare bboxes are only considered when eval_type is 'bbox_2d'
+        # the iou between det bbox and DontCare bbox is calculated in 2d
+        # if the iou is greater than the threshold, the det bbox is ignored
+        # during the process of assigning the ignore flag for each gt bbox and det bbox
+        # the following rules are used
+        # the ignore flag for each gt bbox and det bbox is determined
+        # the value of the ignore flag is 0, 1 and -1
+        # 0 means this bbox is considered during evaluation, the cls == gt_cls, and the ignore is False.
+        # 1 means this bbox is ignored during evaluation
+        # -1 means this bbox is not considered during evaluation (different class)
         for cls in CLASSES:
             eval_ap_results[cls] = []
             eval_aos_results[cls] = []
@@ -136,6 +180,7 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
                     cur_gt_names = gt_result["name"]
                     cur_difficulty = gt_result["difficulty"]
                     gt_ignores, dc_bboxes = [], []
+
                     for j, cur_gt_name in enumerate(cur_gt_names):
                         ignore = cur_difficulty[j] < 0 or cur_difficulty[j] > difficulty
                         if cur_gt_name == cls:
@@ -209,7 +254,11 @@ def do_eval(det_results, gt_results, CLASSES, saved_path, skipped_ids):
                         for gt_ignores in total_gt_ignores
                     ]
                 )
-                score_thresholds = get_score_thresholds(tp_scores, total_num_valid_gt)
+
+                # score threshold for the PR curve with 41 points
+                score_thresholds = get_score_thresholds(
+                    tp_scores, total_num_valid_gt, num_sample_pts=41
+                )
 
                 # 3. draw PR curve and calculate mAP
                 tps, fns, fps, total_aos = [], [], [], []
@@ -366,6 +415,7 @@ def main(args):
         split="val",
         pts_prefix=args.pts_prefix,
         intensity_filling_strategy=args.intensity_filling_strategy,
+        intensity_forced_value=args.intensity_forced_value,
         reference_pcd_prefix=args.reference_pcd_prefix,
         file_name_changer=args.file_name_changer,
         dequantizer=dequantizer,
@@ -387,8 +437,6 @@ def main(args):
     val_dataset.remove_skipped_idxes(skipped_idxes)
     print(f"After removing errors, {len(val_dataset)} samples remain.")
 
-    val_dataset = val_dataset.create_sample_dataset(num_samples=args.evaluation_number)
-
     val_dataloader = get_dataloader(
         dataset=val_dataset,
         batch_size=args.batch_size,
@@ -400,10 +448,16 @@ def main(args):
 
     if not args.no_cuda:
         model = PointPillars(nclasses=args.nclasses).cuda()
-        model.load_state_dict(torch.load(args.ckpt))
+        checkpoint = torch.load(args.ckpt)
     else:
         model = PointPillars(nclasses=args.nclasses)
-        model.load_state_dict(torch.load(args.ckpt, map_location=torch.device("cpu")))
+        checkpoint = torch.load(args.ckpt, map_location=torch.device("cpu"))
+
+    # Support both dict and raw state_dict
+    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+        model.load_state_dict(checkpoint["model_state_dict"])
+    else:
+        model.load_state_dict(checkpoint)
 
     saved_path = args.saved_path
     os.makedirs(saved_path, exist_ok=True)
@@ -413,11 +467,12 @@ def main(args):
     pcd_limit_range = np.array([0, -40, -3, 70.4, 40, 0.0], dtype=np.float32)
 
     model.eval()
-    skipped_ids = []
     with torch.no_grad():
         format_results = {}
         print("Predicting and Formatting the results.")
         for i, data_dict in enumerate(tqdm(val_dataloader)):
+            # if i >= 100:
+            #     break
             if not args.no_cuda:
                 # move the tensors to the cuda
                 for key in data_dict:
@@ -449,12 +504,12 @@ def main(args):
                     "score": [],
                 }
                 if type(result) != dict:
-                    idx = data_dict['batched_img_info'][j]['image_idx']
-                    # ground_truth = val_dataset.data_infos[idx]['annos']
+                    idx = data_dict["batched_img_info"][j]["image_idx"]
+                    # ground_truth = val_dataset.data_infos[idx]["annos"]
                     # for key in ground_truth:
                     #     if key in format_result:
                     #         format_result[key] = ground_truth[key]
-                    print(f"Warning: Result {idx} is a {type(result)}. Using ground truth instead.")
+                    print(f"Warning: Result {idx} is a {type(result)}. Skip.")
                     skipped_ids.append(idx)
                 else:
                     calib_info = data_dict["batched_calib_info"][j]
@@ -482,7 +537,9 @@ def main(args):
                         format_result["name"].append(LABEL2CLASSES[label])
                         format_result["truncated"].append(0.0)
                         format_result["occluded"].append(0)
-                        alpha = camera_bbox[6] - np.arctan2(camera_bbox[0], camera_bbox[2])
+                        alpha = camera_bbox[6] - np.arctan2(
+                            camera_bbox[0], camera_bbox[2]
+                        )
                         format_result["alpha"].append(alpha)
                         format_result["bbox"].append(bbox2d)
                         format_result["dimensions"].append(camera_bbox[3:6])
@@ -493,13 +550,20 @@ def main(args):
                     write_label(
                         format_result, os.path.join(saved_submit_path, f"{idx:06d}.txt")
                     )
-
+                if len(format_result["name"]) == 0:
+                    skipped_ids.append(idx)
+                    print(f"Warning: No detection for {idx}. Skipped.")
                 format_results[idx] = {k: np.array(v) for k, v in format_result.items()}
 
-        print(f"evaluation skipped {len(skipped_ids)} images: {skipped_ids}")
         write_pickle(format_results, os.path.join(saved_path, "results.pkl"))
 
     print("Evaluating.. Please wait several seconds.")
+
+    # recorfd the skipped image file to an output file and print on console
+    with open(os.path.join(saved_path, "skipped_images.txt"), "w") as skip_img_file:
+        print(f"{skipped_ids}", skip_img_file)
+
+    print(f"evaluation skipped {len(skipped_ids)} images: {skipped_ids}", skip_img_file)
     # det_results, gt_results, CLASSES, saved_path
     do_eval(
         det_results=format_results,
@@ -626,14 +690,6 @@ if __name__ == "__main__":
         default=None,
         help="the config file to dequantize the point cloud if the point cloud is quantized",
     )
-
-    parser.add_argument(
-        "--evaluation_number",
-        type=int,
-        default=100,
-        help="the number of samples to evaluate"
-    )
-
 
     parser.add_argument(
         "--prepare_eval",

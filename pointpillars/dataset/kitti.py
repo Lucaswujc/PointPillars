@@ -1,4 +1,3 @@
-import random
 import numpy as np
 import re
 import os
@@ -93,23 +92,6 @@ class Kitti(Dataset):
             point_range_filter=[0, -39.68, -3, 69.12, 39.68, 1],
             object_range_filter=[0, -39.68, -3, 69.12, 39.68, 1],
         )
-    def create_sample_dataset(self, num_samples=100):
-        """
-        Returns a new Kitti object with a random sample of num_samples from data_infos.
-        """
-        new_kitti = Kitti(
-            data_root=self.data_root,
-            split=self.split,
-            pts_prefix=self.pts_prefix,
-            file_name_changer=self.file_name_changer,
-            intensity_filling_strategy=self.intensity_filling_strategy,
-            reference_pcd_prefix=self.reference_pcd_prefix,
-            dequantizer=self.dequantizer,
-        )
-        sampled_keys = random.sample(list(self.data_infos.keys()), num_samples)
-        new_kitti.data_infos = {k: self.data_infos[k] for k in sampled_keys}
-        new_kitti.sorted_ids = list(new_kitti.data_infos.keys())
-        return new_kitti
 
     def remove_dont_care(self, annos_info):
         keep_ids = [

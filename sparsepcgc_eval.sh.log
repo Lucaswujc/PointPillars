@@ -1,0 +1,220 @@
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: linear_regression
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless
+==========BBOX_2D==========
+Pedestrian AP@0.5: 27.7406 24.9554 24.7207
+Cyclist AP@0.5: 23.1681 17.2196 16.6038
+Car AP@0.7: 47.4486 38.6484 38.2383
+==========AOS==========
+Pedestrian AOS@0.5: 20.2792 18.5352 18.5408
+Cyclist AOS@0.5: 23.1414 16.2268 15.7369
+Car AOS@0.7: 44.5346 36.0920 35.1333
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 29.0054 24.8471 24.8487
+Cyclist AP@0.5: 23.0340 16.4899 14.9975
+Car AP@0.7: 47.8346 39.2003 38.6523
+==========BBOX_3D==========
+Pedestrian AP@0.5: 25.7019 22.6055 21.5915
+Cyclist AP@0.5: 21.8699 15.3020 14.6033
+Car AP@0.7: 33.9826 27.4431 26.7383
+
+==========Overall==========
+bbox_2d AP: 32.7858 26.9411 26.5209
+AOS AP: 29.3184 23.6180 23.1370
+bbox_bev AP: 33.2913 26.8458 26.1662
+bbox_3d AP: 27.1848 21.7835 20.9777
+
+
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: conform_to_target_intensity
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless
+=========BBOX_2D==========
+Pedestrian AP@0.5: 56.7873 51.6491 48.1085
+Cyclist AP@0.5: 73.8203 52.5588 49.8420
+Car AP@0.7: 87.3583 74.4191 69.2377
+==========AOS==========
+Pedestrian AOS@0.5: 44.5628 40.2744 37.4334
+Cyclist AOS@0.5: 72.1271 49.7526 47.2838
+Car AOS@0.7: 87.0411 73.5841 68.1833
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 52.8261 46.2909 42.0668
+Cyclist AP@0.5: 72.8874 50.9933 48.3431
+Car AP@0.7: 86.2935 74.0617 69.0301
+==========BBOX_3D==========
+Pedestrian AP@0.5: 42.9735 38.1220 34.0072
+Cyclist AP@0.5: 70.3972 49.3332 46.4091
+Car AP@0.7: 71.8352 57.0731 55.7018
+
+==========Overall==========
+bbox_2d AP: 72.6553 59.5423 55.7294
+AOS AP: 67.9103 54.5371 50.9668
+bbox_bev AP: 70.6690 57.1153 53.1467
+bbox_3d AP: 61.7353 48.1761 45.3727
+
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: random
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless
+
+=========BBOX_2D==========
+Pedestrian AP@0.5: 33.6793 25.7585 24.5496
+Cyclist AP@0.5: 24.1759 21.4524 20.5746
+Car AP@0.7: 10.7888 14.7097 15.7437
+==========AOS==========
+Pedestrian AOS@0.5: 18.2216 14.3254 13.5321
+Cyclist AOS@0.5: 19.6002 17.2241 16.6876
+Car AOS@0.7: 8.7708 13.6188 14.6403
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 11.9346 11.3520 11.5288
+Cyclist AP@0.5: 23.8682 20.8877 19.8614
+Car AP@0.7: 11.9596 13.4507 14.6511
+==========BBOX_3D==========
+Pedestrian AP@0.5: 10.2198 10.0286 10.1945
+Cyclist AP@0.5: 23.0293 19.0855 18.7492
+Car AP@0.7: 3.0303 9.0909 9.0909
+
+==========Overall==========
+bbox_2d AP: 22.8813 20.6402 20.2893
+AOS AP: 15.5309 15.0561 14.9533
+bbox_bev AP: 15.9208 15.2301 15.3471
+bbox_3d AP: 12.0931 12.7350 12.6782
+
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless_0.1
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: linear_regression
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision_0.1.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless_0.1
+
+=========BBOX_2D==========
+Pedestrian AP@0.5: 5.9199 5.7896 8.3098
+Cyclist AP@0.5: 11.3109 11.6079 11.4889
+Car AP@0.7: 12.5375 13.4515 13.4493
+==========AOS==========
+Pedestrian AOS@0.5: 3.3908 3.2686 5.9909
+Cyclist AOS@0.5: 11.1557 11.0191 10.9384
+Car AOS@0.7: 11.2756 11.5843 10.8943
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 4.3746 12.3401 12.9036
+Cyclist AP@0.5: 11.2890 11.4706 10.9288
+Car AP@0.7: 13.4612 14.1496 14.0026
+==========BBOX_3D==========
+Pedestrian AP@0.5: 1.9290 1.9673 1.8720
+Cyclist AP@0.5: 11.0560 10.6813 10.4994
+Car AP@0.7: 10.5805 8.6142 8.2388
+
+==========Overall==========
+bbox_2d AP: 9.9228 10.2830 11.0827
+AOS AP: 8.6074 8.6240 9.2745
+bbox_bev AP: 9.7083 12.6534 12.6117
+bbox_3d AP: 7.8552 7.0876 6.8700
+
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless_0.1
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: conform_to_target_intensity
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision_0.1.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless_0.1
+
+=========BBOX_2D==========
+Pedestrian AP@0.5: 41.5492 35.4777 33.1378
+Cyclist AP@0.5: 62.4823 47.2357 44.9118
+Car AP@0.7: 84.9607 68.8575 67.6790
+==========AOS==========
+Pedestrian AOS@0.5: 29.8764 25.6546 24.0632
+Cyclist AOS@0.5: 60.7531 44.2798 42.1931
+Car AOS@0.7: 84.2497 67.8774 66.2076
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 37.2904 31.2001 28.8109
+Cyclist AP@0.5: 59.5327 43.7260 41.3299
+Car AP@0.7: 83.3249 68.3657 67.1444
+==========BBOX_3D==========
+Pedestrian AP@0.5: 30.8955 25.9809 24.1208
+Cyclist AP@0.5: 56.8041 40.5871 38.2867
+Car AP@0.7: 65.7005 53.5378 48.4692
+
+==========Overall==========
+bbox_2d AP: 62.9974 50.5237 48.5762
+AOS AP: 58.2931 45.9373 44.1546
+bbox_bev AP: 60.0493 47.7639 45.7617
+bbox_3d AP: 51.1334 40.0353 36.9589
+
+data_root           : /home/wuyuren/repos/PointPillars/sparsepcgc_eval
+ckpt                : /home/wuyuren/repos/PointPillars/pretrained/epoch_160.pth
+saved_path          : /home/wuyuren/repos/PointPillars/sparsepcgc_eval/results/dense_results_lossless_0.1
+batch_size          : 1
+num_workers         : 4
+nclasses            : 3
+no_cuda             : False
+pts_prefix          : velodyne_eval
+file_name_changer   : \1_dec.ply
+intensity_filling_strategy: random
+reference_pcd_prefix: velodyne_reduced
+dequantize_config   : /home/wuyuren/repos/PointPillars/dequantizer_precision_0.1.yaml
+prepare_eval        : /home/wuyuren/repos/PointPillars/sparsepcgc_data/dense_results_lossless_0.1
+
+=========BBOX_2D==========
+Pedestrian AP@0.5: 6.9383 5.1640 5.6661
+Cyclist AP@0.5: 12.9257 15.0831 14.9233
+Car AP@0.7: 4.1506 10.7480 11.3877
+==========AOS==========
+Pedestrian AOS@0.5: 3.6485 2.2919 2.7342
+Cyclist AOS@0.5: 9.5593 8.9114 8.8068
+Car AOS@0.7: 2.0712 10.4540 11.0382
+==========BBOX_BEV==========
+Pedestrian AP@0.5: 5.7849 5.2621 5.5131
+Cyclist AP@0.5: 10.9358 12.8395 11.8440
+Car AP@0.7: 3.0303 10.2675 10.9395
+==========BBOX_3D==========
+Pedestrian AP@0.5: 3.4129 3.2824 3.3568
+Cyclist AP@0.5: 10.5647 12.4364 11.3389
+Car AP@0.7: 0.6494 9.0909 9.0909
+
+==========Overall==========
+bbox_2d AP: 8.0048 10.3317 10.6591
+AOS AP: 5.0930 7.2191 7.5264
+bbox_bev AP: 6.5837 9.4563 9.4322
+bbox_3d AP: 4.8756 8.2699 7.9289

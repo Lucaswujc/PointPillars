@@ -1,148 +1,130 @@
-# [PointPillars: Fast Encoders for Object Detection from Point Clouds](https://arxiv.org/abs/1812.05784) 
+# Custom Changes in This Workspace
 
-A Simple PointPillars PyTorch Implenmentation for 3D Lidar(KITTI) Detection. [[Zhihu](https://zhuanlan.zhihu.com/p/521277176)]
+This README only tracks custom work done in this workspace.
 
-- It can be run without installing [Spconv](https://github.com/traveller59/spconv), [mmdet](https://github.com/open-mmlab/mmdetection) or [mmdet3d](https://github.com/open-mmlab/mmdetection3d). 
-- Only one detection network (PointPillars) was implemented in this repo, so the code may be more easy to read. 
-- Sincere thanks for the great open-source architectures [mmcv](https://github.com/open-mmlab/mmcv), [mmdet](https://github.com/open-mmlab/mmdetection) and [mmdet3d](https://github.com/open-mmlab/mmdetection3d), which helps me to learn 3D detetion and implement this repo.
+Original upstream README: [readme_original](readme_original)
 
-## News
+## Project Summary (July 2025)
 
-- **2025-02** Making PointPillars a python package out of the code is supported.
-- **2024-04** Exporting PointPillars to ONNX & TensorRT is supported on branch [feature/deployment](https://github.com/zhulf0804/PointPillars/tree/feature/deployment).
+This project started with onboarding into LiDAR compression-for-detection research and understanding the PointPillars detection pipeline as the baseline system.
 
-    ![](./figures/pytorch_trt.png)
+### Goals
 
-## mAP on KITTI validation set (Easy, Moderate, Hard)
+- Build a practical understanding of PointPillars and its deployment constraints in our environment.
+- Test whether aggressive point cloud compression can preserve detection quality.
+- Evaluate an existing LiDAR compression framework (SparsePCGC) before proposing new model ideas.
+- Create visualization tools to verify reconstruction quality and detection behavior.
 
-| Repo | Metric | Overall | Pedestrian | Cyclist | Car |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| this repo | 3D-BBox | 73.3259 62.7834 59.6278 | 51.4642 47.9446 43.8040 | 81.8677 63.6617 60.9126 | 86.6456 76.7439 74.1668 | 
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | 3D-BBox  | 72.0537, 60.1114, 55.8320 | 52.0263, 46.4037, 42.4841 | 78.7231, 59.9526, 57.2489 | 85.4118, 73.9780, 67.7630 |
-| this repo | BEV | 77.8540 69.8003 66.6699 | 59.1687 54.3456 50.5023 | 84.4268 67.1409 63.7409 | 89.9664 87.9145 85.7664 | 
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | BEV | 76.6485, 67.7609, 64.5605 | 59.0778, 53.3638, 48.4230 | 80.9328, 63.3447, 60.0618 | 89.9348, 86.5743, 85.1967 |
-| this repo | 2D-BBox | 80.5097 74.6120 71.4758 | 64.6249 61.4201 57.5965 | 86.2569 73.0828 70.1726 | 90.6471 89.3330 86.6583 |
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | 2D-BBox | 78.4938, 73.4781, 70.3613 | 62.2413, 58.9157, 55.3660 | 82.6460, 72.3547, 68.4669 | 90.5939, 89.1638, 87.2511 |
-| this repo | AOS | 74.9647 68.1712 65.2817 | 49.3777 46.7284 43.8352 | 85.0412 69.1024 66.2801 | 90.4752 88.6828 85.7298 |
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | AOS | 72.41, 66.23, 63.55 | 46.00, 43.22, 40.94 | 80.85, 67.20, 63.63 | 90.37, 88.27, 86.07 |
+### Process
 
-- **Note: Here, we report [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) (2022/02/09-2022/03/01) performance based on the officially provided [checkpoint](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1/configs/pointpillars#kitti). Much improvements were made in the [mmdet3d v1.0.0rc1](https://github.com/open-mmlab/mmdetection3d/tree/v1.0.0rc1)**. 
+- Familiarized myself with PointPillars internals and attempted end-to-end setup on NVIDIA Jetson hardware.
+- Encountered version incompatibilities in legacy PyTorch dependencies; adapted execution strategy to available infrastructure.
+- Ran a staged deletion experiment as a fast proxy for compression, increasing random point dropping from 20 percent to 90 percent.
+- Evaluated SparsePCGC across its dense/sparse and lossy/lossless settings, with attention to MP-POV and SOPA design choices.
+- Used AWS GPU hosts when deprecated dependencies blocked reliable local execution.
+- Developed a visualizer to inspect reconstructed outputs with 2D and 3D bounding boxes for qualitative validation.
 
-## Detection Visualization
+### Findings
 
-![](./figures/pc_pred_000134.png)
-![](./figures/img_3dbbox_000134.png)
+- PointPillars setup friction was non-trivial due to legacy dependency stacks, especially on Jetson-class environments.
+- In deletion-based simulation, detection performance stayed relatively stable until point removal exceeded roughly 80 percent, suggesting significant redundancy in LiDAR point clouds.
+- SparsePCGC's MP-POV and SOPA strategy offered a useful reference for prioritizing informative spatial regions during compression.
+- A recurring hypothesis from experiments was that a meaningful share of compression gains comes from stacked arithmetic encoding stages.
 
-## [Install] 
+### Main Learnings
 
-Install PointPillars as a python package and all its dependencies as follows:
+- Validate hypotheses with simple, controlled experiments first; they often reveal signal faster than complex redesigns.
+- Environment and dependency constraints are core research risks, not side tasks.
+- Combining quantitative metrics with visualization is essential for trustworthy iteration in reconstruction and detection workflows.
 
-```
-cd PointPillars/
-pip install -r requirements.txt
-python setup.py build_ext --inplace
-pip install .
-```
+## 1) Custom evaluation pipeline work
 
-## [Datasets]
+- Extended and maintained local evaluation workflows in [evaluate.py](evaluate.py) and [evaluate2.py](evaluate2.py).
+- Continued KITTI metric work around 2D, BEV, and 3D IoU paths, class/difficulty filtering, score thresholding, and AP reporting.
+- Produced additional result artifacts in [results](results) and [results2](results2).
 
-1. Download
+## 2) New large submission output set
 
-    Download [point cloud](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_velodyne.zip)(29GB), [images](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_image_2.zip)(12 GB), [calibration files](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_calib.zip)(16 MB)和[labels](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_label_2.zip)(5 MB)。Format the datasets as follows:
-    ```
-    kitti
-        |- training
-            |- calib (#7481 .txt)
-            |- image_2 (#7481 .png)
-            |- label_2 (#7481 .txt)
-            |- velodyne (#7481 .bin)
-        |- testing
-            |- calib (#7518 .txt)
-            |- image_2 (#7518 .png)
-            |- velodyne (#7518 .bin)
-    ```
+- Added a new KITTI-format submission/result set in [results2/submit](results2/submit).
+- Current structure in [results2](results2):
+    - [results2/eval_results.txt](results2/eval_results.txt)
+    - [results2/results.pkl](results2/results.pkl)
+    - [results2/submit](results2/submit) containing a large number of per-frame prediction files.
 
-2. Pre-process KITTI datasets First
+## 3) Deletion robustness experiments
 
-    ```
-    cd PointPillars/
-    python pre_process_kitti.py --data_root your_path_to_kitti
-    ```
+- Kept deletion-based evaluation flow for modified KITTI subsets.
+- Batch script used: [delete_evaluation.sh](delete_evaluation.sh).
+- Main experiment roots:
+    - [kitti_deleted/0.6](kitti_deleted/0.6)
+    - [kitti_deleted/0.8](kitti_deleted/0.8)
+    - [kitti_deleted/0.9](kitti_deleted/0.9)
+    - [results/del_results](results/del_results)
 
-    Now, we have datasets as follows:
-    ```
-    kitti
-        |- training
-            |- calib (#7481 .txt)
-            |- image_2 (#7481 .png)
-            |- label_2 (#7481 .txt)
-            |- velodyne (#7481 .bin)
-            |- velodyne_reduced (#7481 .bin)
-        |- testing
-            |- calib (#7518 .txt)
-            |- image_2 (#7518 .png)
-            |- velodyne (#7518 .bin)
-            |- velodyne_reduced (#7518 .bin)
-        |- kitti_gt_database (# 19700 .bin)
-        |- kitti_infos_train.pkl
-        |- kitti_infos_val.pkl
-        |- kitti_infos_trainval.pkl
-        |- kitti_infos_test.pkl
-        |- kitti_dbinfos_train.pkl
-    ```
+## 4) SparsePCGC reconstruction to detection evaluation
 
-## [Training]
+- Maintained evaluation flow from reconstructed point clouds to detection metrics.
+- Main orchestration scripts:
+    - [sparsepcgc_eval.sh](sparsepcgc_eval.sh)
+    - [eval_first10_alltypes.sh](eval_first10_alltypes.sh)
+- Dequantization configurations used:
+    - [dequantizer_precision.yaml](dequantizer_precision.yaml)
+    - [dequantizer_precision_0.1.yaml](dequantizer_precision_0.1.yaml)
+    - [dequantizer_precision_0.001.yaml](dequantizer_precision_0.001.yaml)
+    - [dequantizer_octree.yaml](dequantizer_octree.yaml)
+    - [dequantizer_resolution.yaml](dequantizer_resolution.yaml)
 
-```
-cd PointPillars/
-python train.py --data_root your_path_to_kitti
-```
+Primary data roots:
 
-## [Evaluation]
+- [sparsepcgc_data](sparsepcgc_data)
+- [sparsepcgc_eval](sparsepcgc_eval)
+- [structured_sparsepcgc_data](structured_sparsepcgc_data)
+- [sparsepcgc_results](sparsepcgc_results)
 
-```
-cd PointPillars/
-python evaluate.py --ckpt pretrained/epoch_160.pth --data_root your_path_to_kitti 
-```
+## 5) Custom notebooks and utility workflows
 
-## [Test]
+Notebooks used for experiment iteration and analysis:
 
-```
-cd PointPillars/
+- [build_ply.ipynb](build_ply.ipynb)
+- [deletion.ipynb](deletion.ipynb)
+- [display_boxes.ipynb](display_boxes.ipynb)
+- [evaluate_visual.ipynb](evaluate_visual.ipynb)
+- [work.ipynb](work.ipynb)
 
-# 1. infer and visualize point cloud detection
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path 
+Utility scripts used in custom runs:
 
-# 2. infer and visualize point cloud detection and gound truth.
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path --calib_path your_calib_path  --gt_path your_gt_path
+- [display_bin.py](display_bin.py)
+- [misc/vis_data_gt.py](misc/vis_data_gt.py)
 
-# 3. infer and visualize point cloud & image detection
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path --calib_path your_calib_path --img_path your_img_path
+## 6) Personal implementation notes
 
+Detailed development notes are tracked in [misc/log.md](misc/log.md), including augmentation details, training/debug notes, and evaluation follow-ups.
 
-e.g. 
-a. [infer on val set 000134]
+## 7) Notebook-based evaluation summary
 
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/val/000134.bin
+Source notebook: [evaluate_visual.ipynb](evaluate_visual.ipynb)
 
-or
+Work completed in this notebook:
 
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/val/000134.bin \
-               --calib_path pointpillars/dataset/demo_data/val/000134.txt \
-               --img_path pointpillars/dataset/demo_data/val/000134.png \
-               --gt_path pointpillars/dataset/demo_data/val/000134_gt.txt
+- Loaded reconstructed-evaluation predictions, ground truth annotations, and baseline PointPillars predictions from pkl files.
+- Built dataframe-based loaders for per-image analysis and class filtering (Pedestrian, Car, Cyclist).
+- Added utility code for IoU and overlap checks to support comparison logic.
+- Produced class-wise comparison plots between Ground Truth vs Reconstructed and Ground Truth vs PointPillars.
+- Computed detection counts and derived Recall, Precision, and F1 for each class.
 
-b. [infer on test set 000002]
+Detection results captured from notebook outputs:
 
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/test/000002.bin
+| Class | Model | TP | FN | FP | Recall | Precision | F1 |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pedestrian | Reconstructed | 687 | 137 | 718 | 0.834 | 0.489 | 0.616 |
+| Pedestrian | PointPillars | 768 | 56 | 1127 | 0.932 | 0.405 | 0.565 |
+| Car | Reconstructed | 3423 | 0 | 345 | 1.000 | 0.908 | 0.952 |
+| Car | PointPillars | 3410 | 13 | 185 | 0.996 | 0.949 | 0.972 |
+| Cyclist | Reconstructed | 286 | 341 | 266 | 0.456 | 0.518 | 0.485 |
+| Cyclist | PointPillars | 496 | 131 | 564 | 0.791 | 0.468 | 0.588 |
 
-or 
+Key findings from these results:
 
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/test/000002.bin \
-               --calib_path pointpillars/dataset/demo_data/test/000002.txt \
-               --img_path pointpillars/dataset/demo_data/test/000002.png
-```
-
-## Acknowledements
-
-Thanks for the open source code [mmcv](https://github.com/open-mmlab/mmcv), [mmdet](https://github.com/open-mmlab/mmdetection) and [mmdet3d](https://github.com/open-mmlab/mmdetection3d).
+- Pedestrian: reconstructed output has lower recall but noticeably better precision than PointPillars, yielding a slightly higher F1.
+- Car: reconstructed output reaches perfect recall, but PointPillars has much better precision and higher F1 overall.
+- Cyclist: reconstructed output reduces false positives (higher precision) but misses many more ground-truth instances (much lower recall), so F1 is lower than PointPillars.
